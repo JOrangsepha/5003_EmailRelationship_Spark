@@ -1,0 +1,13 @@
+kagglehub
+kafka-python
+pandas
+pyarrow
+pyspark==3.5.2
+# Python 客户端主版本须与集群一致：9.x 会向 ES 发 compatible-with=9，连 7/8 集群会 400
+elasticsearch>=8.12.0,<9
+transformers>=4.40
+torch>=2.2
+# graphframes-py 0.9+ 仅支持 Python>=3.10；在 3.9 上 pip 会跳过此行，避免整份 requirements 安装失败
+graphframes-py==0.11.0; python_version >= "3.10"
+networkx
+matplotlib
