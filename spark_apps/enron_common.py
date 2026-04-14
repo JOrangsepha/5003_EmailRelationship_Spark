@@ -45,26 +45,72 @@ KAFKA_EMAIL_JSON_SCHEMA = StructType([
     StructField("x_origin", StringType(), True),
     StructField("x_filename", StringType(), True),
     StructField("body", StringType(), True),
-    StructField("body_length", LongType(), True),
+    # 与 2-spark-streaming.ipynb 保持一致：IntegerType
+    StructField("body_length", IntegerType(), True),
 ])
 
+# ============ 运行环境选择（local / external） ============
+# local: 默认本地 Kafka + 本地 Elasticsearch
+# external: 通过 EXTERNAL_* 环境变量切到外部 Kafka/ES（可对齐 2-spark-streaming.ipynb）
+ENRON_PROFILE = os.getenv("ENRON_PROFILE", "local").strip().lower()
+
+
 # ============ Kafka 配置（全部带默认值，不会炸） ============
-KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
-# 与 data_preparation/scripts/produce_emails_to_kafka.py 默认 --topic 一致
-KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "emails_raw")
-KAFKA_SECURITY_PROTOCOL = os.getenv("KAFKA_SECURITY_PROTOCOL")
-KAFKA_SASL_MECHANISM = os.getenv("KAFKA_SASL_MECHANISM")
-KAFKA_SASL_USERNAME = os.getenv("KAFKA_SASL_USERNAME")
-KAFKA_SASL_PASSWORD = os.getenv("KAFKA_SASL_PASSWORD")
+# 统一默认 topic 为 raw_emails_topic
+_LOCAL_KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+_LOCAL_KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "raw_emails_topic")
+_LOCAL_KAFKA_SECURITY_PROTOCOL = os.getenv("KAFKA_SECURITY_PROTOCOL")
+_LOCAL_KAFKA_SASL_MECHANISM = os.getenv("KAFKA_SASL_MECHANISM")
+_LOCAL_KAFKA_SASL_USERNAME = os.getenv("KAFKA_SASL_USERNAME")
+_LOCAL_KAFKA_SASL_PASSWORD = os.getenv("KAFKA_SASL_PASSWORD")
+
+_EXTERNAL_KAFKA_BOOTSTRAP_SERVERS = os.getenv("EXTERNAL_KAFKA_BOOTSTRAP_SERVERS")
+_EXTERNAL_KAFKA_TOPIC = os.getenv("EXTERNAL_KAFKA_TOPIC", _LOCAL_KAFKA_TOPIC)
+_EXTERNAL_KAFKA_SECURITY_PROTOCOL = os.getenv("EXTERNAL_KAFKA_SECURITY_PROTOCOL")
+_EXTERNAL_KAFKA_SASL_MECHANISM = os.getenv("EXTERNAL_KAFKA_SASL_MECHANISM")
+_EXTERNAL_KAFKA_SASL_USERNAME = os.getenv("EXTERNAL_KAFKA_SASL_USERNAME")
+_EXTERNAL_KAFKA_SASL_PASSWORD = os.getenv("EXTERNAL_KAFKA_SASL_PASSWORD")
+
+if ENRON_PROFILE == "external" and _EXTERNAL_KAFKA_BOOTSTRAP_SERVERS:
+    KAFKA_BOOTSTRAP_SERVERS = _EXTERNAL_KAFKA_BOOTSTRAP_SERVERS
+    KAFKA_TOPIC = _EXTERNAL_KAFKA_TOPIC
+    KAFKA_SECURITY_PROTOCOL = _EXTERNAL_KAFKA_SECURITY_PROTOCOL
+    KAFKA_SASL_MECHANISM = _EXTERNAL_KAFKA_SASL_MECHANISM
+    KAFKA_SASL_USERNAME = _EXTERNAL_KAFKA_SASL_USERNAME
+    KAFKA_SASL_PASSWORD = _EXTERNAL_KAFKA_SASL_PASSWORD
+else:
+    KAFKA_BOOTSTRAP_SERVERS = _LOCAL_KAFKA_BOOTSTRAP_SERVERS
+    KAFKA_TOPIC = _LOCAL_KAFKA_TOPIC
+    KAFKA_SECURITY_PROTOCOL = _LOCAL_KAFKA_SECURITY_PROTOCOL
+    KAFKA_SASL_MECHANISM = _LOCAL_KAFKA_SASL_MECHANISM
+    KAFKA_SASL_USERNAME = _LOCAL_KAFKA_SASL_USERNAME
+    KAFKA_SASL_PASSWORD = _LOCAL_KAFKA_SASL_PASSWORD
+
 
 # ============ ES 配置（全部带默认值，不会炸） ============
-ES_HOST = os.getenv("ES_HOST", "localhost")
-ES_PORT = os.getenv("ES_PORT", "9200")
-ES_API_KEY = os.getenv("ES_API_KEY")
-ES_VERIFY_CERTS = os.getenv("ES_VERIFY_CERTS", "false")
+_LOCAL_ES_HOST = os.getenv("ES_HOST", "localhost")
+_LOCAL_ES_PORT = os.getenv("ES_PORT", "9200")
+_LOCAL_ES_API_KEY = os.getenv("ES_API_KEY")
+_LOCAL_ES_VERIFY_CERTS = os.getenv("ES_VERIFY_CERTS", "false")
+
+_EXTERNAL_ES_HOST = os.getenv("EXTERNAL_ES_HOST")
+_EXTERNAL_ES_PORT = os.getenv("EXTERNAL_ES_PORT", "443")
+_EXTERNAL_ES_API_KEY = os.getenv("EXTERNAL_ES_API_KEY")
+_EXTERNAL_ES_VERIFY_CERTS = os.getenv("EXTERNAL_ES_VERIFY_CERTS", "false")
+
+if ENRON_PROFILE == "external" and _EXTERNAL_ES_HOST:
+    ES_HOST = _EXTERNAL_ES_HOST
+    ES_PORT = _EXTERNAL_ES_PORT
+    ES_API_KEY = _EXTERNAL_ES_API_KEY
+    ES_VERIFY_CERTS = _EXTERNAL_ES_VERIFY_CERTS
+else:
+    ES_HOST = _LOCAL_ES_HOST
+    ES_PORT = _LOCAL_ES_PORT
+    ES_API_KEY = _LOCAL_ES_API_KEY
+    ES_VERIFY_CERTS = _LOCAL_ES_VERIFY_CERTS
 
 # 所有 ES 索引名（情感与 stream_enron_sentiment 默认写入一致，便于看板）
-ES_INDEX_SENTIMENT = os.getenv("ES_INDEX_SENTIMENT", "enron_emails_sentiment")
+ES_INDEX_SENTIMENT = os.getenv("ES_INDEX_SENTIMENT", "enron_emails")
 ES_INDEX_EDGES = "enron_edges"
 ES_INDEX_VERTEX_METRICS = "enron_vertex_metrics"
 ES_INDEX_COMMUNITIES = "enron_communities"

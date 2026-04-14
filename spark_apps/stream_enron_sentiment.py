@@ -20,10 +20,10 @@ from enron_common import (
     ES_INDEX_SENTIMENT,
     ES_INDEX_EDGES,
     KAFKA_TOPIC,
+    KAFKA_EMAIL_JSON_SCHEMA,
     build_spark_session,
     es_index_exists,
     get_es_client,
-    kafka_stream_to_email_df,
 )
 
 from elasticsearch import helpers
@@ -43,15 +43,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--topic",
         default=os.getenv("KAFKA_TOPIC", KAFKA_TOPIC),
-        help="须与 produce_emails_to_kafka.py 的 --topic 一致（默认 emails_raw）。",
+        help="须与 produce_emails_to_kafka.py 的 --topic 一致（默认 raw_emails_topic）。",
     )
     parser.add_argument(
         "--checkpoint-dir",
-        default=os.getenv("CHECKPOINT_DIR", "./checkpoints/enron_kafka_es_sentiment"),
+        default=os.getenv("CHECKPOINT_DIR", "./checkpoints/enron_kafka_es"),
     )
     parser.add_argument(
         "--starting-offsets",
-        default=os.getenv("KAFKA_STARTING_OFFSETS", "latest"),
+        default=os.getenv("KAFKA_STARTING_OFFSETS", "earliest"),
         help="Use earliest for a full replay, latest for only new messages.",
     )
     parser.add_argument(
@@ -267,12 +267,33 @@ def _split_emails(raw_value: Any) -> list[str]:
     return out
 
 
+def _format_sent_at_for_es(value: Any) -> str | None:
+    """与 2-spark-streaming.ipynb 对齐：yyyy-MM-dd'T'HH:mm:ss.SSSZ。"""
+    if value is None:
+        return None
+    try:
+        if hasattr(value, "to_pydatetime"):
+            value = value.to_pydatetime()
+        if isinstance(value, datetime):
+            dt = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+            ms = dt.strftime("%f")[:3]
+            return dt.strftime("%Y-%m-%dT%H:%M:%S.") + ms + dt.strftime("%z")
+        text = str(value).strip()
+        if not text:
+            return None
+        # 兜底：原样返回
+        return text
+    except Exception:
+        return str(value)
+
+
 def _sentiment_es_payload(raw: dict[str, Any]) -> dict[str, Any]:
-    """只保留索引 mapping 中的字段；把 to_es 等还原成 ES 的 to/cc/bcc。"""
+    """只保留索引 mapping 中的字段；字段命名对齐 2-spark-streaming.ipynb。"""
     p = _json_safe_record(raw)
-    p["to"] = str(p.pop("to_es", None) or "")
-    p["cc"] = str(p.pop("cc_es", None) or "")
-    p["bcc"] = str(p.pop("bcc_es", None) or "")
+    p["to"] = str(p.get("to") or "")
+    p["cc"] = str(p.get("cc") or "")
+    p["bcc"] = str(p.get("bcc") or "")
+    p["sent_at"] = _format_sent_at_for_es(p.get("sent_at"))
     p["ingested_at"] = datetime.now(timezone.utc).isoformat()
     return {k: p[k] for k in p if k in _SENTIMENT_ES_FIELDS}
 
@@ -458,7 +479,17 @@ def main() -> None:
         reader = reader.option(key, value)
 
     raw_stream = reader.load()
-    parsed_df = kafka_stream_to_email_df(raw_stream)
+
+    from pyspark.sql import functions as F
+
+    parsed_df = (
+        raw_stream
+        .select(F.from_json(F.col("value").cast("string"), KAFKA_EMAIL_JSON_SCHEMA).alias("data"))
+        .select("data.*")
+        .withColumn("sent_at", F.regexp_replace(F.col("sent_at"), " UTC$", ""))
+        .withColumn("sent_at", F.to_timestamp(F.col("sent_at"), "yyyy-MM-dd HH:mm:ss"))
+        .withColumn("sent_at", F.date_format(F.col("sent_at"), "yyyy-MM-dd'T'HH:mm:ss.SSSZ"))
+    )
 
     query = (
         parsed_df.writeStream.foreachBatch(
@@ -476,4 +507,4 @@ if __name__ == "__main__":
     main()
 # python3 data_preparation/scripts/produce_emails_to_kafka.py \
 #   --bootstrap-servers localhost:9092 \
-#   --topic emails_raw
+#   --topic raw_emails_topic

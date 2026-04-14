@@ -1,26 +1,37 @@
 #!/bin/bash
 set -euo pipefail
 # 用法：
-#   ./run.sh                 # auto：自动判断（首次无图数据会走 bootstrap）
-#   ./run.sh auto
-#   ./run.sh normal          # 实时模式（latest）
-#   ./run.sh bootstrap       # 首次回放模式（earliest + 新 checkpoint）
+#   ./run.sh                           # auto + local
+#   ./run.sh auto local
+#   ./run.sh normal local             # 实时模式（latest）
+#   ./run.sh bootstrap local          # 首次回放（earliest + 新 checkpoint）
+#   ./run.sh auto external            # 使用外部 Kafka/ES（与 2-spark-streaming.ipynb 对齐）
 #
 # 可选环境变量：
 #   PYTHON_BIN=python3.10
 #   GRAPH_TRIGGER_INTERVAL="10 seconds"
 #   GRAPH_RECOMPUTE_INTERVAL=1
 #   GRAPH_CHECKPOINT_DIR="checkpoints/graph_stream_custom"
-#   RUN_GRAPH_METRICS=0                # 0: 仅实时边/平均情感（推荐）；1: 启动 GraphFrames 指标计算
+#   RUN_GRAPH_METRICS=0               # 0: 仅实时边/平均情感（推荐）；1: 启动 GraphFrames 指标计算
+#   ENRON_PROFILE=local|external      # 不传第二个参数时可用该变量指定
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 
 MODE="${1:-auto}"
+PROFILE="${2:-${ENRON_PROFILE:-local}}"
 if [[ "$MODE" != "auto" && "$MODE" != "normal" && "$MODE" != "bootstrap" ]]; then
   echo "错误: 模式必须是 auto / normal / bootstrap"
-  echo "示例: ./run.sh auto"
+  echo "示例: ./run.sh auto local"
   exit 1
 fi
+if [[ "$PROFILE" != "local" && "$PROFILE" != "external" ]]; then
+  echo "错误: profile 必须是 local / external"
+  echo "示例: ./run.sh auto external"
+  exit 1
+fi
+
+# 显式导出，确保 enron_common.py 读取一致（不依赖 notebook 运行状态）
+export ENRON_PROFILE="$PROFILE"
 
 # 与情感脚本、PySpark 使用同一解释器（可覆盖：export PYTHON_BIN=/path/to/python3）
 PYTHON_BIN="${PYTHON_BIN:-python3}"
@@ -49,6 +60,46 @@ if ! "$PYTHON_BIN" -c "import transformers, torch" 2>/dev/null; then
 fi
 
 mkdir -p logs
+
+# ========== 连接配置（独立于 notebook，全部在 run.sh 内注入） ==========
+# local：直接使用 enron_common.py 的本地默认值或本地环境变量
+# external：要求提供 EXTERNAL_*，脚本会在这里统一 export 后再启动三个进程
+if [[ "$ENRON_PROFILE" == "external" ]]; then
+  export EXTERNAL_KAFKA_BOOTSTRAP_SERVERS="${EXTERNAL_KAFKA_BOOTSTRAP_SERVERS:-}"
+  export EXTERNAL_KAFKA_TOPIC="${EXTERNAL_KAFKA_TOPIC:-raw_emails_topic}"
+  export EXTERNAL_KAFKA_SECURITY_PROTOCOL="${EXTERNAL_KAFKA_SECURITY_PROTOCOL:-SASL_SSL}"
+  export EXTERNAL_KAFKA_SASL_MECHANISM="${EXTERNAL_KAFKA_SASL_MECHANISM:-PLAIN}"
+  export EXTERNAL_KAFKA_SASL_USERNAME="${EXTERNAL_KAFKA_SASL_USERNAME:-}"
+  export EXTERNAL_KAFKA_SASL_PASSWORD="${EXTERNAL_KAFKA_SASL_PASSWORD:-}"
+
+  export EXTERNAL_ES_HOST="${EXTERNAL_ES_HOST:-}"
+  export EXTERNAL_ES_PORT="${EXTERNAL_ES_PORT:-443}"
+  export EXTERNAL_ES_API_KEY="${EXTERNAL_ES_API_KEY:-}"
+  export EXTERNAL_ES_VERIFY_CERTS="${EXTERNAL_ES_VERIFY_CERTS:-false}"
+
+  missing=0
+  for v in \
+    EXTERNAL_KAFKA_BOOTSTRAP_SERVERS \
+    EXTERNAL_KAFKA_SASL_USERNAME \
+    EXTERNAL_KAFKA_SASL_PASSWORD \
+    EXTERNAL_ES_HOST \
+    EXTERNAL_ES_API_KEY; do
+    if [[ -z "${!v:-}" ]]; then
+      echo "错误: external 模式缺少环境变量 $v"
+      missing=1
+    fi
+  done
+
+  if [[ "$missing" -eq 1 ]]; then
+    echo "请先导出 external 变量后再运行，例如："
+    echo "  export EXTERNAL_KAFKA_BOOTSTRAP_SERVERS='xxx:9092'"
+    echo "  export EXTERNAL_KAFKA_SASL_USERNAME='Kafka API Key'"
+    echo "  export EXTERNAL_KAFKA_SASL_PASSWORD='Kafka API Secret'"
+    echo "  export EXTERNAL_ES_HOST='https://<your-es-host>:443'"
+    echo "  export EXTERNAL_ES_API_KEY='<your-es-api-key>'"
+    exit 1
+  fi
+fi
 
 # ========== 关系图参数（按模式自动设置） ==========
 GRAPH_TRIGGER_INTERVAL="${GRAPH_TRIGGER_INTERVAL:-10 seconds}"
@@ -103,6 +154,8 @@ PID3=$!
 
 echo "============================================"
 echo "  模式 MODE: $MODE"
+echo "  环境 PROFILE: $ENRON_PROFILE"
+echo "  Topic: ${EXTERNAL_KAFKA_TOPIC:-${KAFKA_TOPIC:-raw_emails_topic}}"
 echo "  SPARK_HOME (与 PySpark 一致): $SPARK_HOME"
 echo "  情感分析  PID: $PID1"
 echo "  关系图    PID: ${PID2:-未启动（RUN_GRAPH_METRICS=0）}"
