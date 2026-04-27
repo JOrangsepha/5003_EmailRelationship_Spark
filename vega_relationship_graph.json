@@ -35,7 +35,7 @@
 
     {
       "name": "anchor",
-      "value": [460,310],
+      "value": [460, 310],
       "on": [
         {
           "events": "wheel!",
@@ -51,17 +51,17 @@
         {
           "events": "wheel!",
           "force": true,
-          "update": "pow(1.001, event.deltaY * pow(16,event.deltaMode))"
+          "update": "pow(1.001, event.deltaY * pow(16, event.deltaMode))"
         }
       ]
     },
 
     {
       "name": "xdom",
-      "value": [0,920],
+      "value": [0, 920],
       "on": [
         {
-          "events": {"signal":"zoom"},
+          "events": {"signal": "zoom"},
           "update": "[anchor[0] + (xdom[0]-anchor[0])*zoom, anchor[0] + (xdom[1]-anchor[0])*zoom]"
         },
         { "events": "dblclick", "update": "[0,920]" }
@@ -70,13 +70,22 @@
 
     {
       "name": "ydom",
-      "value": [0,620],
+      "value": [0, 620],
       "on": [
         {
-          "events": {"signal":"zoom"},
+          "events": {"signal": "zoom"},
           "update": "[anchor[1] + (ydom[0]-anchor[1])*zoom, anchor[1] + (ydom[1]-anchor[1])*zoom]"
         },
         { "events": "dblclick", "update": "[0,620]" }
+      ]
+    },
+
+    {
+      "name": "hovered_node",
+      "value": null,
+      "on": [
+        {"events": "symbol:mouseover", "update": "datum"},
+        {"events": "symbol:mouseout",  "update": "null"}
       ]
     }
   ],
@@ -88,22 +97,29 @@
         "index": "enron_vertex_metrics",
         "body": {
           "size": 30,
-          "sort": [{ "pagerank": "desc" }],
-          "query": { "term": { "is_enron": true } },
-          "_source": ["email","pagerank","total_degree","is_enron"]
+          "sort": [{"pagerank": "desc"}],
+          "query": {
+            "bool": {
+              "must": [
+                {"term": {"is_enron": true}},
+                {"range": {"out_degree": {"gt": 0}}}
+              ]
+            }
+          },
+          "_source": ["email", "pagerank", "total_degree", "is_enron"]
         }
       },
-      "format": {"property":"hits.hits"},
+      "format": {"property": "hits.hits"},
       "transform": [
-        {"type":"formula","as":"id","expr":"datum._source.email"},
-        {"type":"formula","as":"pagerank","expr":"datum._source.pagerank"},
-        {"type":"formula","as":"degree","expr":"datum._source.total_degree"},
-        {"type":"formula","as":"is_enron","expr":"datum._source.is_enron"},
-        {"type":"formula","as":"local","expr":"split(datum.id,'@')[0]"},
+        {"type": "formula", "as": "id",           "expr": "datum._source.email"},
+        {"type": "formula", "as": "pagerank",     "expr": "datum._source.pagerank"},
+        {"type": "formula", "as": "degree",       "expr": "datum._source.total_degree"},
+        {"type": "formula", "as": "is_enron",     "expr": "datum._source.is_enron"},
+        {"type": "formula", "as": "local",        "expr": "split(datum._source.email, '@')[0]"},
         {
-          "type":"formula",
-          "as":"display_name",
-          "expr":"upper(slice(datum.local,0,1)) + slice(replace(replace(replace(datum.local,'.',' '),'_',' '),'-',' '),1)"
+          "type": "formula",
+          "as": "display_name",
+          "expr": "upper(slice(datum.local, 0, 1)) + slice(replace(replace(replace(datum.local, '.', ' '), '_', ' '), '-', ' '), 1)"
         }
       ]
     },
@@ -114,86 +130,94 @@
         "index": "enron_vertex_metrics",
         "body": {
           "size": 10,
-          "sort": [{ "pagerank": "desc" }],
-          "query": { "term": { "is_enron": false } },
-          "_source": ["email","pagerank","total_degree","is_enron"]
+          "sort": [{"pagerank": "desc"}],
+          "query": {
+            "bool": {
+              "must": [
+                {"term": {"is_enron": false}},
+                {"range": {"out_degree": {"gt": 0}}}
+              ]
+            }
+          },
+          "_source": ["email", "pagerank", "total_degree", "is_enron"]
         }
       },
-      "format": {"property":"hits.hits"},
+      "format": {"property": "hits.hits"},
       "transform": [
-        {"type":"formula","as":"id","expr":"datum._source.email"},
-        {"type":"formula","as":"pagerank","expr":"datum._source.pagerank"},
-        {"type":"formula","as":"degree","expr":"datum._source.total_degree"},
-        {"type":"formula","as":"is_enron","expr":"datum._source.is_enron"},
-        {"type":"formula","as":"local","expr":"split(datum.id,'@')[0]"},
+        {"type": "formula", "as": "id",           "expr": "datum._source.email"},
+        {"type": "formula", "as": "pagerank",     "expr": "datum._source.pagerank"},
+        {"type": "formula", "as": "degree",       "expr": "datum._source.total_degree"},
+        {"type": "formula", "as": "is_enron",     "expr": "datum._source.is_enron"},
+        {"type": "formula", "as": "local",        "expr": "split(datum._source.email, '@')[0]"},
         {
-          "type":"formula",
-          "as":"display_name",
-          "expr":"upper(slice(datum.local,0,1)) + slice(replace(replace(replace(datum.local,'.',' '),'_',' '),'-',' '),1)"
+          "type": "formula",
+          "as": "display_name",
+          "expr": "upper(slice(datum.local, 0, 1)) + slice(replace(replace(replace(datum.local, '.', ' '), '_', ' '), '-', ' '), 1)"
         }
       ]
     },
 
     {
-      "name":"nodes",
-      "source":["nodes_enron","nodes_external"],
-      "transform":[
-        {"type":"extent","field":"pagerank","signal":"pr_extent"},
+      "name": "nodes",
+      "source": ["nodes_enron", "nodes_external"],
+      "transform": [
+        {"type": "extent", "field": "pagerank", "signal": "pr_extent"},
         {
-          "type":"formula",
-          "as":"pr_norm",
-          "expr":"pr_extent[1] > pr_extent[0] ? (datum.pagerank-pr_extent[0])/(pr_extent[1]-pr_extent[0]) : 0.5"
+          "type": "formula",
+          "as": "pr_norm",
+          "expr": "pr_extent[1] > pr_extent[0] ? (datum.pagerank - pr_extent[0]) / (pr_extent[1] - pr_extent[0]) : 0.5"
         }
       ]
     },
 
     {
-      "name":"edges",
-      "url":{
-        "index":"enron_edges",
-        "body":{
-          "size":5500,
-          "sort":[{"weight":"desc"}],
-          "_source":["src","dst","weight","avg_sentiment"]
+      "name": "edges",
+      "url": {
+        "index": "enron_edges",
+        "body": {
+          "size": 5500,
+          "sort": [{"weight": "desc"}],
+          "query": {"match_all": {}},
+          "_source": ["src", "dst", "weight", "avg_sentiment"]
         }
       },
-      "format":{"property":"hits.hits"},
-      "transform":[
-        {"type":"formula","as":"source","expr":"datum._source.src"},
-        {"type":"formula","as":"target","expr":"datum._source.dst"},
-        {"type":"formula","as":"weight","expr":"datum._source.weight || 1"},
-        {"type":"formula","as":"avg_sentiment","expr":"datum._source.avg_sentiment || 0"},
+      "format": {"property": "hits.hits"},
+      "transform": [
+        {"type": "formula", "as": "source",        "expr": "datum._source.src"},
+        {"type": "formula", "as": "target",        "expr": "datum._source.dst"},
+        {"type": "formula", "as": "weight",        "expr": "datum._source.weight || 1"},
+        {"type": "formula", "as": "avg_sentiment", "expr": "datum._source.avg_sentiment || 0"},
         {
-          "type":"filter",
-          "expr":"indexof(pluck(data('nodes'),'id'),datum.source)>=0 && indexof(pluck(data('nodes'),'id'),datum.target)>=0"
+          "type": "filter",
+          "expr": "indexof(pluck(data('nodes'), 'id'), datum.source) >= 0 && indexof(pluck(data('nodes'), 'id'), datum.target) >= 0"
         }
       ]
     },
 
     {
-      "name":"layout",
-      "source":"nodes",
-      "transform":[
+      "name": "layout",
+      "source": "nodes",
+      "transform": [
         {
-          "type":"force",
-          "iterations":500,
-          "static":false,
-          "forces":[
-            {"force":"center","x":460,"y":310},
+          "type": "force",
+          "iterations": 500,
+          "static": false,
+          "forces": [
+            {"force": "center", "x": 460, "y": 310},
             {
-              "force":"collide",
-              "radius":{"expr":"datum.is_enron ? 18 + datum.pr_norm*18 : 24"}
+              "force": "collide",
+              "radius": {"expr": "datum.is_enron ? 18 + datum.pr_norm * 18 : 24"}
             },
             {
-              "force":"nbody",
-              "strength":{"expr":"datum.is_enron ? -10 : -10"}
+              "force": "nbody",
+              "strength": -10
             },
             {
-              "force":"link",
-              "links":"edges",
-              "id":"id",
-              "distance":130,
-              "strength":0.72
+              "force": "link",
+              "links": "edges",
+              "id": "id",
+              "distance": 130,
+              "strength": 0.72
             }
           ]
         }
@@ -203,96 +227,96 @@
 
   "scales": [
     {
-      "name":"xscale",
-      "domain":{"signal":"xdom"},
-      "range":{"signal":"xrange"}
+      "name": "xscale",
+      "domain": {"signal": "xdom"},
+      "range":  {"signal": "xrange"}
     },
     {
-      "name":"yscale",
-      "domain":{"signal":"ydom"},
-      "range":{"signal":"yrange"}
+      "name": "yscale",
+      "domain": {"signal": "ydom"},
+      "range":  {"signal": "yrange"}
     },
     {
-      "name":"node_size",
-      "type":"linear",
-      "domain":[0,1],
-      "range":[220,2500]
+      "name": "node_size",
+      "type": "linear",
+      "domain": [0, 1],
+      "range": [220, 2500]
     },
     {
-      "name":"edge_width",
-      "type":"linear",
-      "domain":{"data":"edges","field":"weight"},
-      "range":[0.8,7]
+      "name": "edge_width",
+      "type": "linear",
+      "domain": {"data": "edges", "field": "weight"},
+      "range": [0.8, 7]
     }
   ],
 
   "marks": [
     {
-      "type":"path",
-      "from":{"data":"edges"},
-      "encode":{
-        "update":{
-          "path":{
-            "signal":"'M'+(scale('xscale',datum.source.x)+panx)+','+(scale('yscale',datum.source.y)+pany)+' L'+(scale('xscale',datum.target.x)+panx)+','+(scale('yscale',datum.target.y)+pany)"
+      "type": "path",
+      "from": {"data": "edges"},
+      "encode": {
+        "update": {
+          "path": {
+            "signal": "'M' + (scale('xscale', datum.source.x) + panx) + ',' + (scale('yscale', datum.source.y) + pany) + ' L' + (scale('xscale', datum.target.x) + panx) + ',' + (scale('yscale', datum.target.y) + pany)"
           },
-          "stroke":{
-            "signal":"datum.avg_sentiment >= 0 ? '#c5ced6' : '#d9b8b8'"
+          "stroke": {
+            "signal": "datum.avg_sentiment >= 0 ? '#c5ced6' : '#d9b8b8'"
           },
-          "strokeOpacity":{"value":0.45},
-          "strokeWidth":{"scale":"edge_width","field":"weight"},
-          "tooltip":{
-            "signal":"{'Source':datum.source.id,'Target':datum.target.id,'Emails':datum.weight,'Avg Sentiment':format(datum.avg_sentiment,'.3f')}"
+          "strokeOpacity": {"value": 0.45},
+          "strokeWidth":   {"scale": "edge_width", "field": "weight"},
+          "tooltip": {
+            "signal": "{'From': datum.source.id, 'To': datum.target.id, 'Emails': datum.weight, 'Avg Sentiment': format(datum.avg_sentiment, '.3f')}"
           }
         }
       }
     },
 
     {
-      "type":"symbol",
-      "from":{"data":"layout"},
-      "encode":{
-        "update":{
-          "x":{"signal":"scale('xscale',datum.x)+panx"},
-          "y":{"signal":"scale('yscale',datum.y)+pany"},
-          "size":{
-            "signal":"datum.is_enron ? scale('node_size',datum.pr_norm) : 300"
-          },
-          "fill":{
-            "signal":"datum.is_enron ? '#25c8f2' : '#f37f7f'"
-          },
-          "stroke":{"value":"#ffffff"},
-          "strokeWidth":{"value":2},
-          "fillOpacity":{"value":0.92},
-          "tooltip":{
-            "signal":"{'Name':datum.display_name,'Email':datum.id,'PageRank':format(datum.pagerank,'.4f'),'Degree':datum.degree,'Internal':datum.is_enron}"
+      "type": "symbol",
+      "from": {"data": "layout"},
+      "encode": {
+        "update": {
+          "x":    {"signal": "scale('xscale', datum.x) + panx"},
+          "y":    {"signal": "scale('yscale', datum.y) + pany"},
+          "size": {"signal": "datum.is_enron ? scale('node_size', datum.pr_norm) : 300"},
+          "fill": {"signal": "datum.is_enron ? '#25c8f2' : '#f37f7f'"},
+          "stroke":      {"value": "#ffffff"},
+          "strokeWidth": {"value": 2},
+          "fillOpacity": {"value": 0.92},
+          "cursor":      {"value": "pointer"},
+          "tooltip": {
+            "signal": "{'Name': datum.display_name, 'Email': datum.id, 'PageRank': format(datum.pagerank, '.4f'), 'Degree': datum.degree, 'Is Enron': datum.is_enron}"
           }
         }
       }
     },
 
     {
-      "type":"text",
-      "from":{"data":"layout"},
-      "encode":{
-        "update":{
-          "x":{"signal":"scale('xscale',datum.x)+panx"},
-          "y":{"signal":"scale('yscale',datum.y)+pany+16"},
-          "text":{"field":"display_name"},
-          "align":{"value":"center"},
-          "fontSize":{"value":10},
-          "fill":{"value":"#18324d"}
+      "type": "text",
+      "from": {"data": "layout"},
+      "interactive": false,
+      "encode": {
+        "update": {
+          "x":        {"signal": "scale('xscale', datum.x) + panx"},
+          "y":        {"signal": "scale('yscale', datum.y) + pany + 16"},
+          "text":     {"field": "display_name"},
+          "align":    {"value": "center"},
+          "fontSize": {"value": 9},
+          "fill":     {"value": "#18324d"}
         }
       }
     },
+
     {
-      "type":"text",
-      "encode":{
-        "update":{
-          "x":{"value":14},
-          "y":{"signal":"height-12"},
-          "text":{"value":"Drag blank area to pan · Scroll to zoom · Double click to reset"},
-          "fontSize":{"value":11},
-          "fill":{"value":"#66788a"}
+      "type": "text",
+      "interactive": false,
+      "encode": {
+        "update": {
+          "x":        {"value": 14},
+          "y":        {"signal": "height - 12"},
+          "text":     {"signal": "hovered_node ? hovered_node.display_name + ' | ' + hovered_node.id + ' | PR: ' + format(hovered_node.pagerank, '.4f') + ' | Degree: ' + hovered_node.degree : 'Drag blank area to pan · Scroll to zoom · Double click to reset'"},
+          "fontSize": {"value": 11},
+          "fill":     {"value": "#66788a"}
         }
       }
     }
