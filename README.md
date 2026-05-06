@@ -1,9 +1,10 @@
 # 5003 Email Relationship Spark
 
-这是一个基于 **Kafka + Spark Structured Streaming + Elasticsearch + Streamlit** 的 Enron 邮件实时分析项目。
+这是一个基于 **Kafka + Spark Structured Streaming + Elasticsearch + Streamlit + Kibana** 的 Enron 邮件实时分析项目。
 
-项目目标是把邮件数据从 Kafka 流式读入，完成情感分析、关系边构建、图指标计算，并在 Streamlit 看板中展示结果（目前来说）。
+项目目标是把邮件数据从 Kafka 流式读入，完成情感分析、关系边构建、图指标计算，并在 Streamlit 看板或Kibana中展示结果。
 
+注意：由于Kibana是直接建立于Elasticsearch数据库上的，其实现与本MD中主要介绍的Streamlit略有不同；区别在于，在执行完stream_enron_sentiment.py 和build_email_relationship_graph.py这两个分析文件后，若使用Kibana，则直接进入Elasticsearch数据库进行分析。故在3.5启动脚本部分，需要进行相应的调整
 ---
 
 ## 1. 你可以用它做什么
@@ -15,14 +16,14 @@
 - 把邮件关系转换成图结构中的边 `src -> dst`
 - 累积邮件关系权重、平均情感等指标
 - 用 GraphFrames 计算顶点度数、PageRank、社区信息
-- 用 Streamlit 看板展示：
+- 用 Streamlit/Kibana看板展示：
   - 情感分布
   - 最新邮件
   - 关系图谱
   - Top 人物
   - 社区概况
   - A/B 双人关系分析
-
+注意：Kibana需要有Es的会员，而Streamlit需要用到完整的spark_apps文件夹下的所有py文件
 ---
 
 ## 2. 项目结构总览
@@ -83,7 +84,7 @@ stream_enron_sentiment.py                                 build_email_relationsh
 
 1. **数据层**：Kafka 里装原始邮件（data preparation负责的，根据周轩的readme进行）
 2. **计算层**：Spark 做情感分析和图谱计算 （spark apps执行的，直接运行.sh就可以）
-3. **展示层**：Streamlit 从 ES 读取数据并展示
+3. **展示层**：Streamlit 从 ES 读取数据并展示/Kibana直接在ES数据库上进行展示
 
 ---
 
@@ -143,6 +144,8 @@ stream_enron_sentiment.py                                 build_email_relationsh
 
 这是 **邮件情感分析流作业**。
 
+这是Kibana需要用到的其中一个spark_apps下的py文件
+
 它的职责是：
 
 1. 从 Kafka 读入邮件
@@ -197,6 +200,8 @@ stream_enron_sentiment.py                                 build_email_relationsh
 ### 3.3 `spark_apps/build_email_relationship_graph.py`
 
 这是 **关系图谱计算流作业**。
+
+这是Kibana需要用到的其中一个spark_apps下的py文件
 
 它的职责是：
 
