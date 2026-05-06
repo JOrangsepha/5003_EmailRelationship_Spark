@@ -2,8 +2,6 @@
 
 本项目是一个基于 **Kafka + Spark Structured Streaming + Elasticsearch + GraphFrames + Streamlit / Kibana** 的 Enron 邮件实时分析系统。它的核心目标是：先从 Kaggle 的 Enron 邮件数据集中读取邮件，再把邮件转换成结构化 JSON 消息写入 Kafka；随后由 Spark 流式消费 Kafka 数据，完成邮件情感分析、通信关系边构建、图指标计算，并最终通过 Streamlit 看板或 Kibana 进行可视化展示。
 
-简单来说，这个项目不是单纯地“读取邮件并展示”，而是完整模拟了一条实时数据分析链路：
-
 ```text
 Kaggle Enron 数据集
       ↓
@@ -22,7 +20,7 @@ GraphFrames 计算人物关系图指标
 Streamlit / Kibana 可视化展示
 ```
 
-其中，**Streamlit** 更像是项目自带的综合前端看板，适合直接展示分析结果；**Kibana** 则是直接基于 Elasticsearch 索引做可视化分析，适合在 ES 数据已经写入后进一步探索数据。两者的数据来源相同，但展示方式和使用门槛不同。
+其中，**Streamlit** 更是项目自带的综合前端看板，适合直接展示分析结果；**Kibana** 则是直接基于 Elasticsearch 索引做可视化分析，需要ES的API。两者的数据来源相同，但展示方式和使用门槛不同。
 
 ---
 
@@ -41,7 +39,6 @@ Streamlit / Kibana 可视化展示
 - 使用 Streamlit 展示完整分析看板；
 - 或者使用 Kibana 直接基于 Elasticsearch 索引做可视化探索。
 
-你可以把它理解为一个完整的实时邮件关系分析系统：**Kafka 负责传输数据，Spark 负责实时计算，Elasticsearch 负责存储结果，Streamlit / Kibana 负责展示结果。**
 
 ---
 
@@ -104,7 +101,7 @@ Kafka topic: raw_emails_topic
 stream_enron_sentiment.py                 build_email_relationship_graph.py
       │                                              │
       ├── 邮件正文情感分析                            ├── 读取 enron_edges
-      ├── 写入 enron_emails                          ├── 构建 GraphFrame
+      ├── 写入 enron_emails                         ├── 构建 GraphFrame
       └── 聚合通信关系边到 enron_edges                └── 写回图指标与社区结果
       │                                              │
       └──────────────────────────────────────────────┘
@@ -139,7 +136,7 @@ Kaggle DataFrame -> 结构化邮件记录 -> Kafka topic: raw_emails_topic
 
 ### 4.1 核心脚本
 
-#### `scripts/kaggle.py`
+#### `data preparation/scripts/kaggle.py`
 
 该脚本负责使用 `kagglehub` 从 Kaggle 数据集 `wcukierski/enron-email-dataset` 读取 `emails.csv`，并返回一个 `pandas DataFrame`。
 
@@ -153,7 +150,7 @@ python3 scripts/kaggle.py
 
 该命令通常会打印前 5 行数据，不会向 Kafka 写入任何消息。
 
-#### `scripts/email_record_utils.py`
+#### `data preparation/scripts/email_record_utils.py`
 
 该脚本负责把 DataFrame 中的每一行邮件解析成结构化记录。
 
@@ -179,7 +176,7 @@ python3 scripts/kaggle.py
 2001-05-14 23:39:00 UTC
 ```
 
-#### `scripts/produce_emails_to_kafka.py`
+#### `data preparation/scripts/produce_emails_to_kafka.py`
 
 这是 Kafka Producer 主脚本。它会调用 `load_dataframe()` 读取 Kaggle DataFrame，再调用邮件解析工具把每行数据转换成结构化 JSON，最后把这些 JSON 消息逐条发送到 Kafka topic。
 
@@ -449,6 +446,7 @@ DistilBERT 情感分析
 ---
 
 ### 5.4 `spark_apps/streamlit_app.py`
+如果你想使用Kibana进行展示，请直接跳转到第六部分
 
 这是项目自带的 Streamlit 前端看板。它不负责计算，只负责从 Elasticsearch 读取已经计算好的结果，并把结果展示出来。
 
@@ -911,9 +909,3 @@ source .env.external && ./run.sh auto external
 5. **重跑时要同时清理 ES 索引和 checkpoint。**  只清理其中一个可能导致数据不更新、重复写入或结果残留。
 
 6. **外部环境要先加载 `.env.external`。**  否则 Spark 可能仍然使用本地 Kafka / ES 默认配置。
-
----
-
-## 12. 一句话总结
-
-这个项目的核心是搭建一条完整的实时邮件关系分析流水线：**先用 Producer 把 Enron 邮件写入 Kafka，再用 Spark Streaming 做情感分析和关系图计算，最后把结果存入 Elasticsearch，并通过 Streamlit 或 Kibana 展示邮件情感、人物关系和社区结构。**
